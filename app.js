@@ -75,7 +75,9 @@ function categoricalRenderer() {
 }
 
 function createLightBaseLayer() {
-  return new WebTileLayer({ title: 'Light basemap', urlTemplate: 'https://basemaps.cartocdn.com/light_all/{level}/{col}/{row}.png', copyright: '© OpenStreetMap contributors © CARTO' });
+  // CARTO Voyager: same tile grid as Positron/light_all but denser and a shade darker.
+  // Swap the style segment to change basemap: light_all | rastertiles/voyager | dark_all | light_nolabels
+  return new WebTileLayer({ title: 'Light basemap', urlTemplate: 'https://basemaps.cartocdn.com/rastertiles/voyager/{level}/{col}/{row}.png', copyright: '© OpenStreetMap contributors © CARTO' });
 }
 
 function createSwissimageBaseLayer() {
