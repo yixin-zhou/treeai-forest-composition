@@ -28,6 +28,7 @@ let ImageryTileLayer; let MultipartColorRamp; let AlgorithmicColorRamp; let WebT
 let compareLeftMap; let compareRightMap; let compareLeftView; let compareRightView; let compareReady = false; let compareModeActive = false; let compareSyncing = false;
 let activeMode = 'dominant'; let speciesKey = 'picea'; let currentMetric = 'share'; let refreshTimer;
 let inspectionLayers = {}; let inspectionRequestId = 0; let inspectionGraphic;
+let inspectActive = false; let popupPoint = null; let popupWatcher;
 let analysisSelectionLayer; let analysisOverlayLayer; let sketchViewModel; let sketching = false; let regionAnalysis = null; let probabilityAboveDominant = true;
 
 const COMPARE_LAYERS = [
@@ -42,7 +43,7 @@ function setStatus(message) { const target = q('#service-status'); if (target) t
 function compactCount(value) { return new Intl.NumberFormat('en-CH', { notation: 'compact', maximumFractionDigits: 1 }).format(value); }
 
 function setPanel(panelName, forceOpen) {
-  const panels = { settings: q('#settings-panel'), inspector: q('#pixel-inspector'), workbench: q('#analysis-workbench') };
+  const panels = { settings: q('#settings-panel'), workbench: q('#analysis-workbench') };
   const target = panels[panelName];
   const shouldOpen = forceOpen ?? !target.classList.contains('open');
   Object.entries(panels).forEach(([name, panel]) => {
@@ -56,7 +57,7 @@ function setPanel(panelName, forceOpen) {
 }
 
 function closePanels() {
-  ['#settings-panel', '#pixel-inspector', '#analysis-workbench'].forEach(selector => { q(selector).classList.remove('open'); q(selector).setAttribute('aria-hidden', 'true'); });
+  ['#settings-panel', '#analysis-workbench'].forEach(selector => { q(selector).classList.remove('open'); q(selector).setAttribute('aria-hidden', 'true'); });
   q('#settings-toggle').setAttribute('aria-expanded', 'false');
   q('#workbench-toggle').setAttribute('aria-expanded', 'false');
   document.body.classList.remove('panel-open');
@@ -172,6 +173,7 @@ async function startCompare() {
   q('#standard-settings').hidden = true; q('#compare-settings').hidden = false;
   q('#compare-mode').classList.add('active'); q('#compare-mode').setAttribute('aria-pressed', 'true');
   q('#context-bar').hidden = true; document.body.classList.remove('context-open');
+  setInspectMode(false);
   setStats(false); setPanel('settings', true);
   await initialiseCompareMaps();
   if (compareLeftView && mapElement?.view) compareLeftView.viewpoint = mapElement.view.viewpoint.clone();
@@ -278,11 +280,59 @@ function rasterValue(result) {
 
 function isCompositionValue(value) { return Number.isFinite(value) && value >= -0.0001 && value <= 1.0001; }
 
-function setInspectorState(state) {
-  q('#inspector-loading').hidden = state !== 'loading';
-  q('#inspector-empty').hidden = state !== 'empty';
-  q('#inspector-result').hidden = state !== 'result';
-  q('#inspector-nodata').hidden = state !== 'nodata';
+function setPopupState(state) {
+  q('#popup-loading').hidden = state !== 'loading';
+  q('#popup-result').hidden = state !== 'result';
+  q('#popup-nodata').hidden = state !== 'nodata';
+  requestAnimationFrame(positionPopup);
+}
+
+function setInspectMode(active) {
+  inspectActive = active;
+  q('#inspect-toggle').setAttribute('aria-pressed', String(active));
+  q('#inspect-toggle').classList.toggle('active', active);
+  document.body.classList.toggle('inspect-active', active);
+  if (!active) closePopup();
+}
+
+function openPopup(point) {
+  popupPoint = point;
+  const popup = q('#pixel-popup');
+  popup.hidden = false;
+  requestAnimationFrame(() => { positionPopup(); popup.classList.add('visible'); });
+  if (!popupWatcher && reactiveUtils && mapElement?.view) {
+    popupWatcher = reactiveUtils.watch(() => mapElement.view.viewpoint, () => positionPopup());
+  }
+}
+
+function closePopup() {
+  ++inspectionRequestId;
+  const popup = q('#pixel-popup');
+  popup.classList.remove('visible');
+  popupPoint = null;
+  setTimeout(() => { if (!popupPoint) popup.hidden = true; }, 220);
+  if (inspectionGraphic && mapElement?.view) { mapElement.view.graphics.remove(inspectionGraphic); inspectionGraphic = null; }
+}
+
+function positionPopup() {
+  const popup = q('#pixel-popup');
+  if (popup.hidden || !popupPoint || !mapElement?.view) return;
+  let screen;
+  try { screen = mapElement.view.toScreen(popupPoint); } catch { return; }
+  if (!screen) return;
+  const rect = popup.getBoundingClientRect();
+  const margin = 14;
+  const chromeTop = document.body.classList.contains('context-open') ? 140 : 90;
+  let left = screen.x - rect.width / 2;
+  let top = screen.y - rect.height - 20;
+  const below = top < chromeTop;
+  if (below) top = screen.y + 20;
+  left = Math.max(margin, Math.min(window.innerWidth - rect.width - margin, left));
+  top = Math.max(chromeTop, Math.min(window.innerHeight - rect.height - margin, top));
+  popup.style.left = `${Math.round(left)}px`;
+  popup.style.top = `${Math.round(top)}px`;
+  popup.classList.toggle('below', below);
+  popup.style.setProperty('--tail-x', `${Math.round(Math.max(18, Math.min(rect.width - 18, screen.x - left)))}px`);
 }
 
 function drawInspectionPoint(point) {
@@ -324,25 +374,22 @@ async function hitTestInspectionLayers(layers, screenPoint) {
 
 function renderPixelComposition(values, dominantSpecies, point) {
   const sorted = values.map((value, index) => ({ ...SPECIES[index], value })).sort((a, b) => b.value - a.value);
-  const confidence = compositionMetrics(values);
-  const dominantValue = values[SPECIES.findIndex(species => species.key === dominantSpecies.key)];
-  q('#inspector-dominant').textContent = dominantSpecies.name;
-  q('#inspector-dominant-swatch').style.background = dominantSpecies.colour;
-  q('#inspector-dominant-value').textContent = `${(dominantValue * 100).toFixed(1)}% · highest modelled composition`;
-  q('#inspector-lon').textContent = Number(point.longitude).toFixed(5);
-  q('#inspector-lat').textContent = Number(point.latitude).toFixed(5);
-  const total = values.reduce((sum, value) => sum + value, 0);
-  q('#inspector-total').textContent = `sum ${(total * 100).toFixed(1)}%`;
-  q('#pixel-gap').textContent = `${(confidence.gap * 100).toFixed(1)}%`;
-  q('#pixel-entropy').textContent = confidence.entropy.toFixed(2);
-  q('#pixel-confidence-copy').textContent = confidence.gap < .1 ? 'The two leading species are close; treat the dominant class as ambiguous.' : confidence.gap < .25 ? 'The leading class is moderately separated from the runner-up.' : 'The leading species is clearly separated from the runner-up.';
-  q('#pixel-composition-list').innerHTML = sorted.map(species => `
-    <div class="pixel-species${species.key === dominantSpecies.key ? ' dominant' : ''}">
-      <div class="pixel-species-label"><i style="background:${species.colour}"></i><span>${species.name}</span></div>
-      <div class="pixel-bar"><i style="width:${Math.max(0, Math.min(100, species.value * 100))}%;background:${species.colour}"></i></div>
+  q('#popup-dominant').textContent = dominantSpecies.name;
+  q('#popup-swatch').style.background = dominantSpecies.colour;
+  q('#popup-lon').textContent = `${Number(point.longitude).toFixed(5)}°`;
+  q('#popup-lat').textContent = `${Number(point.latitude).toFixed(5)}°`;
+  q('#popup-list').innerHTML = sorted.map((species, index) => `
+    <div class="popup-row${species.key === dominantSpecies.key ? ' dominant' : ''}" style="--i:${index}">
+      <span class="popup-name"><i style="background:${species.colour}"></i><b>${species.name}</b></span>
+      <span class="popup-bar"><i style="background:${species.colour}"></i></span>
       <output>${(species.value * 100).toFixed(1)}%</output>
     </div>`).join('');
-  setInspectorState('result');
+  setPopupState('result');
+  requestAnimationFrame(() => {
+    q('#popup-list').querySelectorAll('.popup-bar i').forEach((bar, index) => {
+      bar.style.width = `${Math.max(0, Math.min(100, sorted[index].value * 100))}%`;
+    });
+  });
 }
 
 function compositionMetrics(values) {
@@ -355,9 +402,9 @@ function compositionMetrics(values) {
 }
 
 async function inspectPixel(point, screenPoint) {
-  if (!point || compareModeActive || sketching) return;
+  if (!point || compareModeActive || sketching || !inspectActive) return;
   const requestId = ++inspectionRequestId;
-  setStats(false); setPanel('inspector', true); setInspectorState('loading'); drawInspectionPoint(point);
+  setPopupState('loading'); openPopup(point); drawInspectionPoint(point);
   setStatus('Reading nine species values at selected 30 m cell…');
   try {
     const speciesLayers = await Promise.all(SPECIES.map(getInspectionLayer));
@@ -365,7 +412,7 @@ async function inspectPixel(point, screenPoint) {
     if (requestId !== inspectionRequestId) return;
     const values = probabilityResults.map(rasterValue);
     if (!values.every(isCompositionValue)) {
-      setInspectorState('nodata'); setStatus('Selected location has no valid model prediction.'); return;
+      setPopupState('nodata'); setStatus('Selected location has no valid model prediction.'); return;
     }
     const computedDominant = values.indexOf(Math.max(...values));
     const dominantSpecies = SPECIES[computedDominant];
@@ -374,9 +421,9 @@ async function inspectPixel(point, screenPoint) {
   } catch (error) {
     if (requestId !== inspectionRequestId) return;
     console.error(error);
-    setInspectorState('nodata');
-    q('#inspector-nodata h2').textContent = 'Pixel values unavailable';
-    q('#inspector-nodata p').textContent = 'One or more probability services could not be read. Please try again.';
+    setPopupState('nodata');
+    q('#popup-nodata-title').textContent = 'Values unavailable';
+    q('#popup-nodata-copy').textContent = 'One or more probability services could not be read. Please try again.';
     setStatus('Could not read all nine pixel values.');
   }
 }
@@ -565,7 +612,10 @@ function wire() {
   q('#workbench-toggle').onclick = () => { setStats(false); setPanel('workbench'); };
   q('#workbench-close').onclick = closePanels;
   q('#drawer-toggle').onclick = closePanels;
-  q('#inspector-close').onclick = () => { ++inspectionRequestId; closePanels(); };
+  q('#inspect-toggle').onclick = () => setInspectMode(!inspectActive);
+  q('#popup-close').onclick = closePopup;
+  document.addEventListener('keydown', event => { if (event.key === 'Escape') closePopup(); });
+  window.addEventListener('resize', positionPopup);
   q('#stats-toggle').onclick = () => setStats(!q('#stats-drawer').classList.contains('open'));
   q('#analysis-collapse').onclick = () => setStats(false);
   q('#legend-toggle').onclick = () => {
