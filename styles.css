@@ -216,15 +216,12 @@ body.context-open{--chrome-h:calc(var(--topbar-h) + var(--context-h))}
 .popup-nodata{min-height:52px}
 .popup-nodata strong{display:block;font-size:14px}
 .popup-nodata p{margin:6px 0 0;color:var(--muted);font-size:12px;line-height:1.5}
-.popup-dominant{display:flex;align-items:center;gap:12px;padding-bottom:14px;border-bottom:1px solid var(--line)}
-.popup-dominant i{flex:0 0 4px;width:4px;height:38px;background:var(--forest-700)}
-.popup-dominant span{display:block;color:#8b978f;font:10px "DM Mono",monospace;text-transform:uppercase;letter-spacing:.1em}
-.popup-dominant h2{margin:5px 0 0;font-size:19px;font-style:italic;font-weight:600;letter-spacing:-.02em}
-.popup-coords{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:12px 0 14px;border-bottom:1px solid var(--line)}
-.popup-coords div{display:grid;gap:3px}
-.popup-coords span{color:#8b978f;font:10px "DM Mono",monospace;text-transform:uppercase;letter-spacing:.08em}
-.popup-coords strong{font:500 12px "DM Mono",monospace;color:#34433d}
-.popup-list{display:grid;gap:9px;padding-top:14px}
+.popup-head{display:flex;align-items:baseline;justify-content:space-between;gap:14px;padding-right:26px}
+.popup-head h2{margin:0;font-size:21px;font-style:italic;font-weight:600;letter-spacing:-.02em;line-height:1.15}
+.popup-head output{flex:0 0 auto;font:500 16px "DM Mono",monospace;color:#3d4b45}
+.popup-rule{height:3px;margin:11px 0 9px;background:var(--forest-700)}
+.popup-coords{margin:0 0 16px;color:#7d8a84;font:12px "DM Mono",monospace}
+.popup-list{display:grid;gap:9px;padding-top:14px;border-top:1px solid var(--line)}
 .popup-row{display:grid;grid-template-columns:124px 1fr 46px;align-items:center;gap:9px;opacity:0;transform:translateY(4px);animation:popup-row-in .4s var(--ease-soft) forwards;animation-delay:calc(var(--i) * 34ms + 60ms)}
 .popup-name{display:flex;align-items:center;gap:7px;min-width:0;color:#46534d;font-size:11px;font-style:italic}
 .popup-name i{flex:0 0 7px;width:7px;height:7px}

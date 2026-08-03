@@ -372,12 +372,18 @@ async function hitTestInspectionLayers(layers, screenPoint) {
   }
 }
 
+function formatCoordinates(point) {
+  const lat = Number(point.latitude); const lon = Number(point.longitude);
+  return `${Math.abs(lat).toFixed(5)}° ${lat >= 0 ? 'N' : 'S'}, ${Math.abs(lon).toFixed(5)}° ${lon >= 0 ? 'E' : 'W'}`;
+}
+
 function renderPixelComposition(values, dominantSpecies, point) {
   const sorted = values.map((value, index) => ({ ...SPECIES[index], value })).sort((a, b) => b.value - a.value);
+  const dominantValue = values[SPECIES.findIndex(species => species.key === dominantSpecies.key)];
   q('#popup-dominant').textContent = dominantSpecies.name;
-  q('#popup-swatch').style.background = dominantSpecies.colour;
-  q('#popup-lon').textContent = `${Number(point.longitude).toFixed(5)}°`;
-  q('#popup-lat').textContent = `${Number(point.latitude).toFixed(5)}°`;
+  q('#popup-share').textContent = `${(dominantValue * 100).toFixed(1)}%`;
+  q('#popup-rule').style.background = dominantSpecies.colour;
+  q('#popup-coords').textContent = formatCoordinates(point);
   q('#popup-list').innerHTML = sorted.map((species, index) => `
     <div class="popup-row${species.key === dominantSpecies.key ? ' dominant' : ''}" style="--i:${index}">
       <span class="popup-name"><i style="background:${species.colour}"></i><b>${species.name}</b></span>

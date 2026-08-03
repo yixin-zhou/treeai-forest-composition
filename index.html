@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=STIX+Two+Text:ital,wght@1,400;1,500&display=swap" rel="stylesheet">
   <link href="https://js.arcgis.com/5.1/@arcgis/core/assets/esri/themes/light/main.css" rel="stylesheet">
-  <link href="./styles.css?v=20260803-popup" rel="stylesheet">
+  <link href="./styles.css?v=20260803-popup2" rel="stylesheet">
 </head>
 <body>
   <arcgis-map id="map" center="8.509764,46.929471" zoom="9" rotation="0" constraints-snap-to-zoom="false"></arcgis-map>
@@ -154,8 +154,9 @@
       <div id="popup-loading" class="popup-loading"><i aria-hidden="true"></i><span>Reading nine species values…</span></div>
       <div id="popup-nodata" class="popup-nodata" hidden><strong id="popup-nodata-title">No model prediction</strong><p id="popup-nodata-copy">This location falls outside the valid inference pixels.</p></div>
       <div id="popup-result" hidden>
-        <div class="popup-dominant"><i id="popup-swatch" aria-hidden="true"></i><div><span>Dominant species</span><h2 id="popup-dominant">—</h2></div></div>
-        <div class="popup-coords"><div><span>Longitude</span><strong id="popup-lon">—</strong></div><div><span>Latitude</span><strong id="popup-lat">—</strong></div></div>
+        <div class="popup-head"><h2 id="popup-dominant">—</h2><output id="popup-share">—</output></div>
+        <div id="popup-rule" class="popup-rule" aria-hidden="true"></div>
+        <p id="popup-coords" class="popup-coords">—</p>
         <div id="popup-list" class="popup-list"></div>
       </div>
     </div>
@@ -190,6 +191,6 @@
   <script src="./arcgis-services.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
   <script type="module" src="https://js.arcgis.com/5.1/"></script>
-  <script type="module" src="./app.js?v=20260803-popup"></script>
+  <script type="module" src="./app.js?v=20260803-popup2"></script>
 </body>
 </html>
