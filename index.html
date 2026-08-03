@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#173c32">
+  <title>TreeAI Switzerland Forest Species Composition</title>
+  <link rel="icon" type="image/png" href="./assets/logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=STIX+Two+Text:ital,wght@1,400;1,500&display=swap" rel="stylesheet">
+  <link href="https://js.arcgis.com/5.1/@arcgis/core/assets/esri/themes/light/main.css" rel="stylesheet">
+  <link href="./styles.css?v=20260803-brandsize" rel="stylesheet">
+</head>
+<body>
+  <arcgis-map id="map" center="8.509764,46.929471" zoom="9" rotation="0" constraints-snap-to-zoom="false"></arcgis-map>
+  <div id="error" hidden></div>
+
+  <main id="explore" aria-label="Swiss forest map explorer">
+    <header class="topbar">
+      <button id="focus-switzerland" class="brand" type="button" aria-label="Reset Switzerland view">
+        <img class="brand-logo" src="./assets/logo.png" alt="" aria-hidden="true">
+        <span class="brand-name"><b>TreeAI</b><em>Switzerland Forest Species Composition</em></span>
+      </button>
+      <nav class="view-switcher" aria-label="Map view">
+        <button id="dominant-mode" class="active" type="button">Dominant Species</button>
+        <button id="leaftype-mode" type="button">Leaf Type Composition</button>
+        <button id="probability-mode" type="button">Species Composition</button>
+      </nav>
+      <div class="topbar-actions">
+        <button id="compare-mode" class="icon-button text-button" type="button" aria-pressed="false"><span aria-hidden="true">◫</span> Compare</button>
+        <button id="workbench-toggle" class="icon-button text-button workbench-button" type="button" aria-expanded="false"><span aria-hidden="true">⌁</span> Workbench</button>
+        <button id="stats-toggle" class="icon-button text-button" type="button" aria-expanded="false"><span aria-hidden="true">▥</span> Statistics</button>
+        <button id="settings-toggle" class="icon-button" type="button" aria-label="Open map settings" aria-expanded="false">⚙</button>
+      </div>
+    </header>
+
+    <div id="context-bar" class="context-bar" hidden>
+      <label for="probability-select">Species</label>
+      <select id="probability-select" aria-label="Species composition layer">
+        <option value="picea">Picea abies</option>
+        <option value="fagus">Fagus sylvatica</option>
+        <option value="abies">Abies alba</option>
+        <option value="larix">Larix decidua</option>
+        <option value="acer">Acer pseudoplatanus</option>
+        <option value="fraxinus">Fraxinus excelsior</option>
+        <option value="pinus">Pinus sylvestris</option>
+        <option value="castanea">Castanea sativa</option>
+        <option value="betula">Betula pendula</option>
+      </select>
+    </div>
+
+    <aside id="settings-panel" class="side-panel settings-panel" aria-label="Map settings" aria-hidden="true">
+      <header class="panel-header">
+        <div><h1>Layer settings</h1></div>
+        <button id="drawer-toggle" type="button" aria-label="Close settings">×</button>
+      </header>
+      <div class="panel-scroll">
+        <div id="standard-settings">
+          <section class="settings-section">
+            <div class="section-label">Base map</div>
+            <label class="switch-row" for="swissimage-toggle"><span>Swissimage imagery <small>swisstopo aerial photography</small></span><input id="swissimage-toggle" type="checkbox"><i aria-hidden="true"></i></label>
+          </section>
+          <section class="settings-section">
+            <div class="section-label">Dominant layer</div>
+            <label class="switch-row" for="dominant-toggle"><span>Show classification</span><input id="dominant-toggle" type="checkbox" checked><i aria-hidden="true"></i></label>
+            <div class="control-block"><label for="dominant-opacity">Opacity <output id="dominant-opacity-value">100%</output></label><input id="dominant-opacity" type="range" min="0" max="100" value="100"></div>
+          </section>
+          <section id="probability-controls" class="settings-section" hidden>
+            <div class="section-label">Composition display</div>
+            <label class="switch-row" for="probability-toggle"><span>Show composition layer</span><input id="probability-toggle" type="checkbox"><i aria-hidden="true"></i></label>
+            <div class="control-block"><label for="probability-opacity">Opacity <output id="probability-opacity-value">100%</output></label><input id="probability-opacity" type="range" min="0" max="100" value="100"></div>
+            <label class="control-block" for="colour-scale">Colour scale<select id="colour-scale"><option value="forest">Forest</option><option value="viridis">Viridis</option><option value="cividis">Cividis</option><option value="blues">Blues</option></select></label>
+            <div class="range-title">Display range <output><span id="range-min">0.00</span>–<span id="range-max">1.00</span></output></div>
+            <div class="range-pair"><label>Min <input id="range-min-input" type="number" min="0" max="0.99" step="0.01" value="0.00" aria-label="Display range minimum"></label><label>Max <input id="range-max-input" type="number" min="0.01" max="1" step="0.01" value="1.00" aria-label="Display range maximum"></label></div>
+          </section>
+        </div>
+        <div id="compare-settings" hidden>
+          <section class="compare-intro"><p class="section-label">Sliding comparison</p><h2>Compare two views</h2><p>Drag the handle across the map. Both views remain locked to the same location and zoom.</p></section>
+          <div class="compare-presets"><button type="button" data-compare-preset="dominant-aerial">Dominant · Aerial</button><button type="button" data-compare-preset="spruce-beech">Spruce · Beech</button><button type="button" data-compare-preset="broadleaf-dominant">Broadleaf · Dominant</button></div>
+          <section class="compare-side-settings"><div class="compare-side-heading"><span class="compare-dot left"></span><strong>Left view</strong></div><label class="control-block" for="compare-left-layer">Visualisation<select id="compare-left-layer"></select></label><label class="control-block" for="compare-left-basemap">Base map<select id="compare-left-basemap"><option value="light">Light map</option><option value="swissimage">Swissimage</option></select></label><label class="control-block" for="compare-left-opacity">Result opacity <output id="compare-left-opacity-value">100%</output><input id="compare-left-opacity" type="range" min="0" max="100" value="100"></label></section>
+          <section class="compare-side-settings"><div class="compare-side-heading"><span class="compare-dot right"></span><strong>Right view</strong></div><label class="control-block" for="compare-right-layer">Visualisation<select id="compare-right-layer"></select></label><label class="control-block" for="compare-right-basemap">Base map<select id="compare-right-basemap"><option value="swissimage" selected>Swissimage</option><option value="light">Light map</option></select></label><label class="control-block" for="compare-right-opacity">Result opacity <output id="compare-right-opacity-value">100%</output><input id="compare-right-opacity" type="range" min="0" max="100" value="100"></label></section>
+          <div class="compare-actions"><button id="compare-swap" type="button">⇄ Swap sides</button><button id="compare-layout" type="button">▯ Side by side</button></div>
+          <button id="compare-exit" class="primary-soft" type="button">Exit comparison</button>
+        </div>
+        <p class="panel-footer-links"><button class="text-link" type="button" data-info="methods">Methods and data sources</button></p>
+        <p id="service-status" class="service-status">Connecting to imagery services…</p>
+      </div>
+    </aside>
+
+    <aside id="analysis-workbench" class="side-panel workbench-panel" aria-label="Advanced analysis workbench" aria-hidden="true">
+      <header class="panel-header">
+        <div><h1>Analysis workbench</h1></div>
+        <button id="workbench-close" type="button" aria-label="Close workbench">×</button>
+      </header>
+      <nav class="workbench-tabs" aria-label="Workbench tools">
+        <button type="button" class="active" data-workbench-tab="area">Area</button>
+        <button type="button" data-workbench-tab="filter">Filter</button>
+        <button type="button" data-workbench-tab="uncertainty">Uncertainty</button>
+        <button type="button" data-workbench-tab="layers">Layers</button>
+      </nav>
+      <div class="panel-scroll workbench-scroll">
+        <section class="workbench-view active" data-workbench-view="area">
+          <div class="workbench-lead"><p class="section-label">1 · REGION ANALYSIS</p><h2>Select an analysis area</h2><p>Draw a rectangle, circle or polygon. The app reads all nine species rasters and calculates composition within the boundary.</p></div>
+          <div class="draw-tools" role="group" aria-label="Draw analysis region">
+            <button id="draw-rectangle" type="button"><span>□</span>Rectangle</button>
+            <button id="draw-circle" type="button"><span>○</span>Circle</button>
+            <button id="draw-polygon" type="button"><span>⬡</span>Polygon</button>
+          </div>
+          <div id="region-empty" class="workbench-empty"><span>⌖</span><strong>No region selected</strong><p>Choose a drawing tool, then draw directly on the map.</p></div>
+          <div id="region-loading" class="analysis-loading" hidden><i></i><div><strong>Reading nine raster layers</strong><span id="region-loading-copy">Preparing sampled grid…</span></div></div>
+          <div id="region-result" hidden>
+            <div class="region-summary"><div><span>Valid samples</span><strong id="region-sample-count">—</strong></div><div><span>Area</span><strong id="region-area">—</strong></div><div><span>Resolution</span><strong id="region-resolution">—</strong></div></div>
+            <div class="result-heading"><div><p class="section-label">MEAN COMPOSITION</p><h3>Nine-species profile</h3></div><button id="clear-region" class="text-link" type="button">Clear</button></div>
+            <div id="region-composition-list" class="region-composition-list"></div>
+            <p id="region-method-note" class="semantic-note"></p>
+          </div>
+        </section>
+
+        <section class="workbench-view" data-workbench-view="filter">
+          <div class="workbench-lead"><p class="section-label">2 · CONDITIONAL FILTER</p><h2>Find matching forest cells</h2><p>Apply a rule to the active region and highlight matching sampled cells on the map.</p></div>
+          <label class="control-block" for="filter-metric">Metric<select id="filter-metric"></select></label>
+          <div class="filter-rule"><label for="filter-operator">Condition<select id="filter-operator"><option value="gte">at least</option><option value="lte">at most</option></select></label><label for="filter-value">Value<input id="filter-value" type="number" min="0" max="100" step="1" value="40"><span>%</span></label></div>
+          <button id="apply-filter" class="primary-action" type="button">Apply filter</button>
+          <div id="filter-result" class="filter-result" hidden><span>Matching samples</span><strong id="filter-match">—</strong><p id="filter-description"></p></div>
+          <p class="semantic-note">Filters operate on the sampled cells of the selected region. Draw an area first.</p>
+        </section>
+
+        <section class="workbench-view" data-workbench-view="uncertainty">
+          <div class="workbench-lead"><p class="section-label">3 · UNCERTAINTY</p><h2>Read model confidence</h2><p>Entropy measures how evenly composition is distributed; the top-two gap measures how clearly one species leads.</p></div>
+          <div id="uncertainty-empty" class="workbench-empty compact"><span>≈</span><strong>Analyse a region first</strong><p>Uncertainty metrics will appear here.</p></div>
+          <div id="uncertainty-result" hidden>
+            <div class="uncertainty-grid"><article><span>Mean entropy</span><strong id="mean-entropy">—</strong><small>0 certain · 1 mixed</small></article><article><span>Mean top-two gap</span><strong id="mean-gap">—</strong><small>Larger is clearer</small></article><article><span>Ambiguous cells</span><strong id="ambiguous-share">—</strong><small>Gap below 10%</small></article><article><span>Mean leading share</span><strong id="mean-leading">—</strong><small>Top species value</small></article></div>
+            <button id="show-uncertainty" class="primary-action" type="button">Show uncertainty map</button>
+            <div class="uncertainty-ramp"><div></div><span><i>Low</i><i>High</i></span></div>
+          </div>
+        </section>
+
+        <section class="workbench-view" data-workbench-view="layers">
+          <div class="workbench-lead"><p class="section-label">5 · LAYER MANAGER</p><h2>Build a layered view</h2><p>Stack dominant classification, a probability surface and analysis overlays independently.</p></div>
+          <section class="layer-card"><header><span class="layer-grip">⋮⋮</span><div><strong>Dominant species</strong><small>Categorical classification</small></div><input id="layer-dominant-visible" type="checkbox" checked aria-label="Show dominant layer"></header><label>Opacity <output id="layer-dominant-opacity-value">100%</output><input id="layer-dominant-opacity" type="range" min="0" max="100" value="100"></label></section>
+          <section class="layer-card"><header><span class="layer-grip">⋮⋮</span><div><strong>Composition surface</strong><small>Float32 probability layer</small></div><input id="layer-probability-visible" type="checkbox" aria-label="Show composition layer"></header><select id="layer-probability-species" aria-label="Composition species"></select><label>Opacity <output id="layer-probability-opacity-value">100%</output><input id="layer-probability-opacity" type="range" min="0" max="100" value="100"></label><button id="layer-move-up" class="layer-order" type="button">Move above classification ↑</button></section>
+          <section class="layer-card compact-card"><header><span class="layer-grip">⋮⋮</span><div><strong>Analysis overlay</strong><small>Region, filters and uncertainty</small></div><input id="layer-analysis-visible" type="checkbox" checked aria-label="Show analysis overlay"></header><button id="clear-analysis-overlay" class="layer-order" type="button">Clear result overlay</button></section>
+          <section class="settings-section"><div class="section-label">Base map</div><div class="segmented"><button id="layer-basemap-light" class="active" type="button">Light map</button><button id="layer-basemap-image" type="button">Swissimage</button></div></section>
+        </section>
+      </div>
+    </aside>
+
+    <aside id="pixel-inspector" class="side-panel inspector-panel" aria-label="Pixel information" aria-hidden="true">
+      <header class="panel-header inspector-header">
+        <div><h1>Cell composition</h1></div>
+        <button id="inspector-close" type="button" aria-label="Close pixel information">×</button>
+      </header>
+      <div class="panel-scroll inspector-scroll">
+        <div id="inspector-loading" class="inspector-loading" hidden><span></span><p>Reading nine raster services…</p></div>
+        <div id="inspector-empty" class="inspector-empty"><span class="empty-crosshair">＋</span><h2>Select a forest pixel</h2><p>Click a coloured grid cell to inspect the modelled composition among the nine tree species.</p></div>
+        <div id="inspector-result" hidden>
+          <section class="dominant-card">
+            <p class="section-label">Dominant species</p>
+            <div class="dominant-row"><i id="inspector-dominant-swatch"></i><div><h2 id="inspector-dominant">—</h2><p id="inspector-dominant-value">Highest modelled composition</p></div></div>
+          </section>
+          <section class="pixel-meta"><div><span>Longitude</span><strong id="inspector-lon">—</strong></div><div><span>Latitude</span><strong id="inspector-lat">—</strong></div><div><span>Grid</span><strong>30 × 30 m</strong></div></section>
+          <section class="pixel-confidence"><div><span>Top-two gap</span><strong id="pixel-gap">—</strong></div><div><span>Entropy</span><strong id="pixel-entropy">—</strong></div><p id="pixel-confidence-copy">—</p></section>
+          <section class="composition-section">
+            <div class="composition-heading"><div><p class="section-label">Top-9 relative composition</p><h2>Species values</h2></div><output id="inspector-total">—</output></div>
+            <div id="pixel-composition-list" class="pixel-composition-list"></div>
+            <p class="semantic-note">Values describe relative composition among the nine modelled species. They are not occurrence probability or absolute canopy cover.</p>
+          </section>
+        </div>
+        <div id="inspector-nodata" class="inspector-empty" hidden><span class="empty-crosshair">∅</span><h2>No model prediction</h2><p>This location is outside the valid inference pixels or contains NoData.</p></div>
+      </div>
+    </aside>
+
+    <section id="legend" class="map-legend" aria-label="Current map legend">
+      <header><div><strong id="legend-title">Dominant species</strong><span id="legend-subtitle">9 classes</span></div><button id="legend-toggle" type="button" aria-label="Collapse legend">−</button></header>
+      <div id="legend-content"><ul id="species-legend"></ul><div id="probability-legend" hidden><div id="ramp"></div><div class="ramp-labels"><span id="l0">0.00</span><span id="l1">0.25</span><span id="l2">0.50</span><span id="l3">0.75</span><span id="l4">1.00</span></div></div></div>
+    </section>
+
+    <section id="stats-drawer" class="stats-drawer" aria-labelledby="analysis-title" aria-hidden="true">
+      <header class="stats-header"><div><h2 id="analysis-title">National composition summary</h2></div><div class="stats-header-actions"><span>30 m grid · National extent</span><button id="analysis-collapse" type="button" aria-label="Close statistics">×</button></div></header>
+      <div id="analysis-content" class="stats-content">
+        <section class="chart-summary"><p>Distribution of the predicted dominant species across <b id="analysis-data-note">15,019,115</b> classified forest cells.</p><div class="metric-toggle" role="group" aria-label="Composition metric"><button type="button" data-metric="share" class="active">Share</button><button type="button" data-metric="cells">Grid cells</button></div><p class="chart-takeaway"><b id="lead-species">Picea abies</b> is the leading dominant class.</p><button id="about-stats" class="text-link" type="button">How these statistics are defined</button></section>
+        <div id="composition-chart" role="img" aria-label="National dominant forest species composition chart"></div>
+      </div>
+    </section>
+
+    <div class="map-actions" aria-label="Map actions"><button id="zoom-in" type="button" aria-label="Zoom in">+</button><button id="zoom-out" type="button" aria-label="Zoom out">−</button></div>
+  </main>
+
+  <section id="compare-workspace" aria-label="Sliding map comparison" hidden>
+    <div id="compare-left-map" class="compare-map" aria-label="Left comparison map"></div>
+    <div id="compare-right-map" class="compare-map compare-right-map" aria-label="Right comparison map"></div>
+    <div id="compare-divider" aria-hidden="true"></div>
+    <button id="compare-handle" type="button" aria-label="Drag to compare views"><span>↔</span></button>
+    <input id="compare-position" type="range" min="10" max="90" value="50" aria-label="Comparison position">
+    <div id="compare-left-label" class="compare-label left-label"><span class="compare-dot left"></span><strong>Dominant species</strong><small>Light map</small></div>
+    <div id="compare-right-label" class="compare-label right-label"><span class="compare-dot right"></span><strong>Base map only</strong><small>Swissimage</small></div>
+  </section>
+
+  <dialog id="info-dialog"><button id="info-close" type="button" aria-label="Close">×</button><h2 id="info-title">Methods</h2><p id="info-copy"></p></dialog>
+  <script src="./arcgis-services.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+  <script type="module" src="https://js.arcgis.com/5.1/"></script>
+  <script type="module" src="./app.js?v=20260803-brandsize"></script>
+</body>
+</html>
