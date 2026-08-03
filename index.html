@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=STIX+Two+Text:ital,wght@1,400;1,500&display=swap" rel="stylesheet">
   <link href="https://js.arcgis.com/5.1/@arcgis/core/assets/esri/themes/light/main.css" rel="stylesheet">
-  <link href="./styles.css?v=20260803-brandsize" rel="stylesheet">
+  <link href="./styles.css?v=20260803-rail" rel="stylesheet">
 </head>
 <body>
   <arcgis-map id="map" center="8.509764,46.929471" zoom="9" rotation="0" constraints-snap-to-zoom="false"></arcgis-map>
@@ -27,13 +27,14 @@
         <button id="leaftype-mode" type="button">Leaf Type Composition</button>
         <button id="probability-mode" type="button">Species Composition</button>
       </nav>
-      <div class="topbar-actions">
-        <button id="compare-mode" class="icon-button text-button" type="button" aria-pressed="false"><span aria-hidden="true">◫</span> Compare</button>
-        <button id="workbench-toggle" class="icon-button text-button workbench-button" type="button" aria-expanded="false"><span aria-hidden="true">⌁</span> Workbench</button>
-        <button id="stats-toggle" class="icon-button text-button" type="button" aria-expanded="false"><span aria-hidden="true">▥</span> Statistics</button>
-        <button id="settings-toggle" class="icon-button" type="button" aria-label="Open map settings" aria-expanded="false">⚙</button>
-      </div>
     </header>
+
+    <nav class="tool-rail" aria-label="Map tools">
+      <button id="compare-mode" class="icon-button text-button" type="button" aria-pressed="false"><span aria-hidden="true">◫</span> Compare</button>
+      <button id="workbench-toggle" class="icon-button text-button workbench-button" type="button" aria-expanded="false"><span aria-hidden="true">⌁</span> Workbench</button>
+      <button id="stats-toggle" class="icon-button text-button" type="button" aria-expanded="false"><span aria-hidden="true">▥</span> Statistics</button>
+      <button id="settings-toggle" class="icon-button rail-foot" type="button" aria-label="Open map settings" aria-expanded="false">⚙</button>
+    </nav>
 
     <div id="context-bar" class="context-bar" hidden>
       <label for="probability-select">Species</label>
@@ -201,6 +202,6 @@
   <script src="./arcgis-services.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
   <script type="module" src="https://js.arcgis.com/5.1/"></script>
-  <script type="module" src="./app.js?v=20260803-brandsize"></script>
+  <script type="module" src="./app.js?v=20260803-rail"></script>
 </body>
 </html>
