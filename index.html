@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=STIX+Two+Text:ital,wght@1,400;1,500&display=swap" rel="stylesheet">
   <link href="https://js.arcgis.com/5.1/@arcgis/core/assets/esri/themes/light/main.css" rel="stylesheet">
-  <link href="./styles.css?v=20260803-nolabels" rel="stylesheet">
+  <link href="./styles.css?v=20260803-layercard" rel="stylesheet">
 </head>
 <body>
   <arcgis-map id="map" center="8.509764,46.929471" zoom="9" rotation="0" constraints-snap-to-zoom="false"></arcgis-map>
@@ -37,20 +37,6 @@
       <button id="settings-toggle" class="icon-button rail-foot" type="button" aria-label="Open map settings" aria-expanded="false">⚙</button>
     </nav>
 
-    <div id="context-bar" class="context-bar" hidden>
-      <label for="probability-select">Species</label>
-      <select id="probability-select" aria-label="Species composition layer">
-        <option value="picea">Picea abies</option>
-        <option value="fagus">Fagus sylvatica</option>
-        <option value="abies">Abies alba</option>
-        <option value="larix">Larix decidua</option>
-        <option value="acer">Acer pseudoplatanus</option>
-        <option value="fraxinus">Fraxinus excelsior</option>
-        <option value="pinus">Pinus sylvestris</option>
-        <option value="castanea">Castanea sativa</option>
-        <option value="betula">Betula pendula</option>
-      </select>
-    </div>
 
     <aside id="settings-panel" class="side-panel settings-panel" aria-label="Map settings" aria-hidden="true">
       <header class="panel-header">
@@ -161,9 +147,29 @@
       </div>
     </div>
 
-    <section id="legend" class="map-legend" aria-label="Current map legend">
-      <header><div><strong id="legend-title">Dominant species</strong><span id="legend-subtitle">9 classes</span></div><button id="legend-toggle" type="button" aria-label="Collapse legend">−</button></header>
-      <div id="legend-content"><ul id="species-legend"></ul><div id="probability-legend" hidden><div id="ramp"></div><div class="ramp-labels"><span id="l0">0.00</span><span id="l1">0.25</span><span id="l2">0.50</span><span id="l3">0.75</span><span id="l4">1.00</span></div></div></div>
+    <section id="legend" class="layer-card" aria-label="Active layer">
+      <header>
+        <h2 id="legend-title">Dominant species</h2>
+        <select id="probability-select" aria-label="Species composition layer" hidden>
+          <option value="picea">Picea abies</option>
+          <option value="fagus">Fagus sylvatica</option>
+          <option value="abies">Abies alba</option>
+          <option value="larix">Larix decidua</option>
+          <option value="acer">Acer pseudoplatanus</option>
+          <option value="fraxinus">Fraxinus excelsior</option>
+          <option value="pinus">Pinus sylvestris</option>
+          <option value="castanea">Castanea sativa</option>
+          <option value="betula">Betula pendula</option>
+        </select>
+        <button id="legend-toggle" type="button" aria-label="Collapse legend">−</button>
+      </header>
+      <div id="legend-content">
+        <ul id="species-legend"></ul>
+        <div id="probability-legend" hidden>
+          <div id="ramp"></div>
+          <div class="ramp-labels"><span id="l0">0.00</span><span id="l1">0.25</span><span id="l2">0.50</span><span id="l3">0.75</span><span id="l4">1.00</span></div>
+        </div>
+      </div>
     </section>
 
     <section id="stats-drawer" class="stats-drawer" aria-labelledby="analysis-title" aria-hidden="true">
@@ -189,6 +195,6 @@
   <script src="./arcgis-services.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
   <script type="module" src="https://js.arcgis.com/5.1/"></script>
-  <script type="module" src="./app.js?v=20260803-nolabels"></script>
+  <script type="module" src="./app.js?v=20260803-layercard"></script>
 </body>
 </html>

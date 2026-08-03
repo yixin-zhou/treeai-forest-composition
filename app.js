@@ -163,7 +163,6 @@ async function startCompare() {
   q('#compare-workspace').hidden = false; q('main').classList.add('compare-active');
   q('#standard-settings').hidden = true; q('#compare-settings').hidden = false;
   q('#compare-mode').classList.add('active'); q('#compare-mode').setAttribute('aria-pressed', 'true');
-  q('#context-bar').hidden = true; document.body.classList.remove('context-open');
   setInspectMode(false);
   setStats(false); setPanel('settings', true);
   await initialiseCompareMaps();
@@ -200,8 +199,6 @@ function setMode(mode) {
   q('#dominant-mode').classList.toggle('active', mode === 'dominant');
   q('#leaftype-mode').classList.toggle('active', mode === 'leaftype');
   q('#probability-mode').classList.toggle('active', mode === 'species');
-  q('#context-bar').hidden = mode !== 'species';
-  document.body.classList.toggle('context-open', mode === 'species');
   q('#probability-controls').hidden = !probability;
   q('#dominant-toggle').checked = !probability; if (dominantLayer) dominantLayer.visible = !probability;
   q('#layer-dominant-visible').checked = !probability;
@@ -212,8 +209,10 @@ function setMode(mode) {
 
 function updateLegend() {
   const probability = isProbabilityMode();
-  q('#legend-title').textContent = probability ? PROBABILITY_NAMES[activeLayerKey()] : 'Dominant species';
-  q('#legend-subtitle').textContent = probability ? 'relative composition · 0–1' : '9 categorical classes';
+  const speciesMode = activeMode === 'species';
+  q('#probability-select').hidden = !speciesMode;
+  q('#legend-title').hidden = speciesMode;
+  q('#legend-title').textContent = activeMode === 'leaftype' ? 'Broadleaf share' : 'Dominant species';
   q('#species-legend').hidden = probability;
   q('#probability-legend').hidden = !probability;
 }
@@ -313,7 +312,7 @@ function positionPopup() {
   if (!screen) return;
   const rect = popup.getBoundingClientRect();
   const margin = 14;
-  const chromeTop = document.body.classList.contains('context-open') ? 140 : 90;
+  const chromeTop = 92;
   let left = screen.x - rect.width / 2;
   let top = screen.y - rect.height - 20;
   const below = top < chromeTop;
