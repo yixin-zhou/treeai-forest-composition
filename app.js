@@ -99,14 +99,6 @@ function setComparePosition(value) {
   q('#compare-position').value = position;
 }
 
-function updateCompareLabel(side) {
-  const layer = q(`#compare-${side}-layer`).value;
-  const basemap = q(`#compare-${side}-basemap`).value;
-  const label = q(`#compare-${side}-label`);
-  label.querySelector('strong').textContent = compareLayerLabel(layer);
-  label.querySelector('small').textContent = basemap === 'swissimage' ? 'Swissimage' : 'Light map';
-}
-
 async function rebuildCompareSide(side) {
   if (!compareReady) return;
   const target = side === 'left' ? compareLeftMap : compareRightMap;
@@ -120,7 +112,6 @@ async function rebuildCompareSide(side) {
     target.add(result);
     try { await result.load(); } catch (error) { fail(`Could not load ${compareLayerLabel(layerKey)}: ${error.message}`); }
   }
-  updateCompareLabel(side);
   setStatus(`Comparison · left: ${compareLayerLabel(q('#compare-left-layer').value)} · right: ${compareLayerLabel(q('#compare-right-layer').value)}`);
 }
 
@@ -635,8 +626,7 @@ function wire() {
     select.onchange = () => rebuildCompareSide(side);
     q(`#compare-${side}-basemap`).onchange = () => rebuildCompareSide(side);
     q(`#compare-${side}-opacity`).oninput = event => { q(`#compare-${side}-opacity-value`).textContent = `${event.target.value}%`; rebuildCompareSide(side); };
-    updateCompareLabel(side);
-  });
+    });
   document.querySelectorAll('[data-compare-preset]').forEach(button => button.onclick = () => applyComparePreset(button.dataset.comparePreset));
   q('#compare-swap').onclick = swapCompareSides;
   q('#compare-layout').onclick = () => {

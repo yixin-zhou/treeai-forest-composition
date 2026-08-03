@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=STIX+Two+Text:ital,wght@1,400;1,500&display=swap" rel="stylesheet">
   <link href="https://js.arcgis.com/5.1/@arcgis/core/assets/esri/themes/light/main.css" rel="stylesheet">
-  <link href="./styles.css?v=20260803-popup3" rel="stylesheet">
+  <link href="./styles.css?v=20260803-nolabels" rel="stylesheet">
 </head>
 <body>
   <arcgis-map id="map" center="8.509764,46.929471" zoom="9" rotation="0" constraints-snap-to-zoom="false"></arcgis-map>
@@ -183,14 +183,12 @@
     <div id="compare-divider" aria-hidden="true"></div>
     <button id="compare-handle" type="button" aria-label="Drag to compare views"><span>↔</span></button>
     <input id="compare-position" type="range" min="10" max="90" value="50" aria-label="Comparison position">
-    <div id="compare-left-label" class="compare-label left-label"><span class="compare-dot left"></span><strong>Dominant species</strong><small>Light map</small></div>
-    <div id="compare-right-label" class="compare-label right-label"><span class="compare-dot right"></span><strong>Base map only</strong><small>Swissimage</small></div>
   </section>
 
   <dialog id="info-dialog"><button id="info-close" type="button" aria-label="Close">×</button><h2 id="info-title">Methods</h2><p id="info-copy"></p></dialog>
   <script src="./arcgis-services.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
   <script type="module" src="https://js.arcgis.com/5.1/"></script>
-  <script type="module" src="./app.js?v=20260803-popup3"></script>
+  <script type="module" src="./app.js?v=20260803-nolabels"></script>
 </body>
 </html>
