@@ -2,7 +2,7 @@
 
 An interactive web map of modelled tree species composition across Switzerland, developed within the TreeAI project at ETH Zürich.
 
-**Live site:** https://YOUR-USERNAME.github.io/treeai-forest-composition/
+**Live site:** https://yixin-zhou.github.io/treeai-forest-composition/
 
 ## What it shows
 
