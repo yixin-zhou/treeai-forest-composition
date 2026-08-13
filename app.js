@@ -35,6 +35,7 @@ let inspectActive = false; let popupPoint = null; let popupWatcher; let inspectT
 let probabilityAboveDominant = true;
 let compositionChart;
 let statisticsChart; let statisticsData; let cantonStatisticsLayer; let cantonFeatures = []; let cantonSelectionGraphic; let nationalBoundaryGraphic;
+let downloadBusy = false;
 
 const COMPARE_LAYERS = [
   { key: 'none', label: 'Base map only' },
@@ -67,6 +68,109 @@ function closeStatistics() {
   q('#statistics-panel').setAttribute('aria-hidden', 'true');
   q('#stats-toggle').setAttribute('aria-expanded', 'false');
   if (mapElement?.view) mapElement.view.padding = { right: 0 };
+}
+
+function closeDownload() {
+  q('#download-panel').classList.remove('open');
+  q('#download-panel').setAttribute('aria-hidden', 'true');
+  q('#download-toggle').setAttribute('aria-expanded', 'false');
+  if (mapElement?.view && !q('#statistics-panel').classList.contains('open')) mapElement.view.padding = { right: 0 };
+}
+
+function selectedProducts() { return [...document.querySelectorAll('input[name="product"]:checked')].map(input => input.value); }
+
+function updateDownloadControls() {
+  const products = document.querySelectorAll('input[name="product"]');
+  const selected = selectedProducts();
+  q('#download-all').checked = selected.length === products.length;
+  q('#download-all').indeterminate = selected.length > 0 && selected.length < products.length;
+  q('#download-selected').disabled = !selected.length || downloadBusy;
+  q('#download-selected').textContent = selected.length ? `Download ${selected.length} selected product${selected.length === 1 ? '' : 's'}` : 'Download selected products';
+}
+
+function triggerDownload(url, filename) {
+  const link = document.createElement('a');
+  link.href = url; link.download = filename; link.target = '_blank'; link.rel = 'noopener';
+  document.body.append(link); link.click(); link.remove();
+}
+
+async function downloadCantonStatistics() {
+  const params = new URLSearchParams({ where: '1=1', outFields: '*', returnGeometry: 'true', f: 'geojson' });
+  const response = await fetch(`${CANTON_STATISTICS_URL}/query?${params}`);
+  if (!response.ok) throw new Error('Canton statistics could not be prepared.');
+  const data = await response.json();
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/geo+json' });
+  const url = URL.createObjectURL(blob);
+  triggerDownload(url, 'swiss_forest_canton_statistics.geojson');
+  window.setTimeout(() => URL.revokeObjectURL(url), 5_000);
+}
+
+async function requestTilePackage(key, label) {
+  const serviceUrl = key === 'dominant' ? DOMINANT_URL : PROBABILITY_URLS[key];
+  if (!serviceUrl) throw new Error(`${label} is not available.`);
+  const serviceInfo = await fetch(`${serviceUrl}?f=json`).then(response => response.json());
+  const levels = serviceInfo.tileInfo?.lods?.map(level => level.level).join(',');
+  if (!levels) throw new Error(`${label} does not expose downloadable tile levels.`);
+  const params = new URLSearchParams({ levels, exportBy: 'LevelID', tilePackage: 'true', async: 'true', storageFormat: 'CompactV2', f: 'json' });
+  const submission = await fetch(`${serviceUrl}/exportTiles`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: params }).then(response => response.json());
+  if (submission.error) throw new Error(submission.error.message || `${label} could not be submitted.`);
+  if (!submission.jobId) throw new Error(`${label} did not return an export job.`);
+  return { serviceUrl, jobId: submission.jobId, label };
+}
+
+async function waitForTilePackage({ serviceUrl, jobId, label }) {
+  for (let attempt = 0; attempt < 180; attempt += 1) {
+    await new Promise(resolve => window.setTimeout(resolve, 2_000));
+    const status = await fetch(`${serviceUrl}/jobs/${jobId}?f=json`).then(response => response.json());
+    if (status.jobStatus === 'esriJobSucceeded') {
+      const result = Object.values(status.results || {})[0];
+      if (!result?.paramUrl) throw new Error(`${label} was prepared, but its download address was not returned.`);
+      const output = await fetch(`${serviceUrl}/jobs/${jobId}/${result.paramUrl}?f=json`).then(response => response.json());
+      const url = typeof output.value === 'string' ? output.value : output.value?.url;
+      if (!url) throw new Error(`${label} was prepared, but its package URL was not returned.`);
+      triggerDownload(url, `${label.toLowerCase().replaceAll(' ', '_')}.tpkx`);
+      return;
+    }
+    if (status.jobStatus === 'esriJobFailed' || status.jobStatus === 'esriJobCancelled') throw new Error(`${label} could not be packaged by ArcGIS.`);
+  }
+  throw new Error(`${label} is still being packaged. Please try again shortly.`);
+}
+
+async function downloadSelectedProducts() {
+  const products = selectedProducts();
+  if (!products.length || downloadBusy) return;
+  downloadBusy = true; updateDownloadControls();
+  const status = q('#download-status');
+  try {
+    const tileProducts = products.filter(key => key !== 'cantonStatistics');
+    if (products.includes('cantonStatistics')) {
+      status.textContent = 'Downloading canton statistics…';
+      await downloadCantonStatistics();
+    }
+    const jobs = [];
+    for (const key of tileProducts) {
+      const label = key === 'dominant' ? 'Dominant Species' : PROBABILITY_NAMES[key];
+      status.textContent = `Preparing ${jobs.length + 1} of ${tileProducts.length} raster products…`;
+      jobs.push(await requestTilePackage(key, label));
+    }
+    for (let index = 0; index < jobs.length; index += 1) {
+      status.textContent = `ArcGIS is packaging ${index + 1} of ${jobs.length} raster products…`;
+      await waitForTilePackage(jobs[index]);
+    }
+    status.textContent = 'Your selected downloads have started.';
+  } catch (error) {
+    console.error(error);
+    status.textContent = `Download could not be completed: ${error.message}`;
+  } finally {
+    downloadBusy = false; updateDownloadControls();
+  }
+}
+
+function openDownload() {
+  exitCompare(); closePanels(); closeStatistics();
+  q('#download-panel').classList.add('open'); q('#download-panel').setAttribute('aria-hidden', 'false'); q('#download-toggle').setAttribute('aria-expanded', 'true');
+  mapElement.view.padding = { right: q('#download-panel').offsetWidth };
+  updateDownloadControls();
 }
 
 function statsKey(name) { return `ba_${name.toLowerCase().replaceAll(' ', '_')}`; }
@@ -114,7 +218,7 @@ async function selectCanton(code) {
 }
 
 async function openStatistics() {
-  exitCompare(); closePanels();
+  exitCompare(); closePanels(); closeDownload();
   q('#statistics-panel').classList.add('open'); q('#statistics-panel').setAttribute('aria-hidden', 'false'); q('#stats-toggle').setAttribute('aria-expanded', 'true');
   mapElement.view.padding = { right: q('#statistics-panel').offsetWidth };
   if (!statisticsData) {
@@ -503,6 +607,7 @@ function showInfo(kind) {
 }
 
 function wire() {
+  q('#species-download-options').innerHTML = SPECIES.map(species => `<label class="download-option"><input type="checkbox" name="product" value="${species.key}"><span><strong>${speciesLabel(species)}</strong><small>${speciesLabel(species)} basal-area proportion</small></span></label>`).join('');
   q('#dominant-mode').onclick = () => { exitCompare(); setMode('dominant'); };
   q('#leaftype-mode').onclick = () => { exitCompare(); setMode('leaftype'); };
   q('#probability-mode').onclick = () => { exitCompare(); setMode('species'); };
@@ -521,6 +626,11 @@ function wire() {
   q('#settings-toggle').onclick = () => setPanel('settings');
   q('#stats-toggle').onclick = () => openStatistics().catch(error => { console.error(error); fail(`Statistics could not load: ${error.message}`); closeStatistics(); });
   q('#statistics-close').onclick = closeStatistics;
+  q('#download-toggle').onclick = openDownload;
+  q('#download-close').onclick = closeDownload;
+  q('#download-all').onchange = event => { document.querySelectorAll('input[name="product"]').forEach(input => { input.checked = event.target.checked; }); updateDownloadControls(); };
+  document.querySelectorAll('input[name="product"]').forEach(input => { input.onchange = updateDownloadControls; });
+  q('#download-selected').onclick = downloadSelectedProducts;
   q('#canton-select').onchange = event => selectCanton(event.target.value).catch(error => { console.error(error); fail(`Could not zoom to canton: ${error.message}`); });
   q('#drawer-toggle').onclick = closePanels;
   q('#inspect-toggle').onclick = () => setInspectMode(!inspectActive);
