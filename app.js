@@ -1,17 +1,20 @@
 const q = selector => document.querySelector(selector);
 
 const SPECIES = [
-  { key: 'picea', name: 'Picea abies', short: 'P. abies', colour: '#1f5fbf', cells: 5888264 },
-  { key: 'fagus', name: 'Fagus sylvatica', short: 'F. sylvatica', colour: '#e05c00', cells: 3381289 },
-  { key: 'abies', name: 'Abies alba', short: 'A. alba', colour: '#7fd0ff', cells: 1407939 },
-  { key: 'larix', name: 'Larix decidua', short: 'L. decidua', colour: '#7ee000', cells: 1350820 },
-  { key: 'acer', name: 'Acer pseudoplatanus', short: 'A. pseudoplatanus', colour: '#ffd21f', cells: 925469 },
-  { key: 'fraxinus', name: 'Fraxinus excelsior', short: 'F. excelsior', colour: '#7b3fd4', cells: 987654 },
-  { key: 'pinus', name: 'Pinus sylvestris', short: 'P. sylvestris', colour: '#00b894', cells: 330500 },
-  { key: 'castanea', name: 'Castanea sativa', short: 'C. sativa', colour: '#8c1d33', cells: 343927 },
-  { key: 'betula', name: 'Betula pendula', short: 'B. pendula', colour: '#ff69c4', cells: 403253 }
+  { key: 'spruce', modelId: 0, rasterValue: 1, name: 'Spruce', scientificName: 'Picea spp.', colour: '#1f5fbf' },
+  { key: 'fir', modelId: 1, rasterValue: 2, name: 'Fir', scientificName: 'Abies alba', colour: '#7fd0ff' },
+  { key: 'pine', modelId: 2, rasterValue: 3, name: 'Pine', scientificName: 'Pinus spp.', colour: '#00b894' },
+  { key: 'larch', modelId: 3, rasterValue: 4, name: 'Larch', scientificName: 'Larix spp.', colour: '#7ee000' },
+  { key: 'arollaPine', modelId: 4, rasterValue: 5, name: 'Arolla pine', scientificName: 'Pinus cembra', colour: '#4d8f83' },
+  { key: 'beech', modelId: 5, rasterValue: 6, name: 'Beech', scientificName: 'Fagus sylvatica', colour: '#e05c00' },
+  { key: 'maple', modelId: 6, rasterValue: 7, name: 'Maple', scientificName: 'Acer spp.', colour: '#ffd21f' },
+  { key: 'ash', modelId: 7, rasterValue: 8, name: 'Ash', scientificName: 'Fraxinus spp.', colour: '#7b3fd4' },
+  { key: 'oak', modelId: 8, rasterValue: 9, name: 'Oak', scientificName: 'Quercus spp.', colour: '#a35a00' },
+  { key: 'chestnut', modelId: 9, rasterValue: 10, name: 'Chestnut', scientificName: 'Castanea sativa', colour: '#8c1d33' },
+  { key: 'other', modelId: 10, rasterValue: 11, name: 'Other', scientificName: 'Other retained taxa', colour: '#76685d' }
 ];
-const PROBABILITY_NAMES = { broadleaf: 'Broadleaf composition', ...Object.fromEntries(SPECIES.map(species => [species.key, `${species.name} composition`])) };
+const speciesLabel = species => species.name;
+const PROBABILITY_NAMES = { broadleaf: 'Broadleaf basal-area proportion', ...Object.fromEntries(SPECIES.map(species => [species.key, `${speciesLabel(species)} basal-area proportion`])) };
 const COLOUR_SCALES = {
   forest: ['#f3f0dd', '#c8ddb9', '#75ad7b', '#2d7458', '#0f3d30'],
   viridis: ['#440154', '#3b528b', '#21918c', '#5ec962', '#fde725'],
@@ -21,20 +24,23 @@ const COLOUR_SCALES = {
 const SERVICES = window.SWISS_FOREST_ARCGIS_SERVICES || {};
 const DOMINANT_URL = SERVICES.dominant;
 const PROBABILITY_URLS = SERVICES.probabilities || {};
+const CANTON_STATISTICS_URL = SERVICES.cantonStatistics;
 
 let mapElement; let swissImageLayer; let dominantLayer; let probabilityLayer;
-let ImageryTileLayer; let MultipartColorRamp; let AlgorithmicColorRamp; let WebTileLayer; let Map; let MapView; let Graphic; let reactiveUtils;
+let ImageryTileLayer; let FeatureLayer; let MultipartColorRamp; let AlgorithmicColorRamp; let WebTileLayer; let Map; let MapView; let Graphic; let geometryEngine; let reactiveUtils;
 let compareLeftMap; let compareRightMap; let compareLeftView; let compareRightView; let compareReady = false; let compareModeActive = false; let compareSyncing = false;
-let activeMode = 'dominant'; let speciesKey = 'picea'; let refreshTimer;
+let activeMode = 'dominant'; let speciesKey = 'spruce'; let refreshTimer;
 let inspectionLayers = {}; let inspectionRequestId = 0; let inspectionGraphic;
 let inspectActive = false; let popupPoint = null; let popupWatcher; let inspectTarget = null;
 let probabilityAboveDominant = true;
+let compositionChart;
+let statisticsChart; let statisticsData; let cantonStatisticsLayer; let cantonFeatures = []; let cantonSelectionGraphic; let nationalBoundaryGraphic;
 
 const COMPARE_LAYERS = [
   { key: 'none', label: 'Base map only' },
-  { key: 'dominant', label: 'Dominant species' },
-  { key: 'broadleaf', label: 'Broadleaf probability' },
-  ...SPECIES.map(species => ({ key: species.key, label: `${species.name} probability` }))
+  { key: 'dominant', label: 'Dominant tree group' },
+  { key: 'broadleaf', label: 'Broadleaf basal-area proportion' },
+  ...SPECIES.map(species => ({ key: species.key, label: `${speciesLabel(species)} basal-area proportion` }))
 ];
 
 function fail(message) { const box = q('#error'); box.textContent = message; box.hidden = false; }
@@ -56,8 +62,73 @@ function closePanels() {
   document.body.classList.remove('panel-open');
 }
 
+function closeStatistics() {
+  q('#statistics-panel').classList.remove('open');
+  q('#statistics-panel').setAttribute('aria-hidden', 'true');
+  q('#stats-toggle').setAttribute('aria-expanded', 'false');
+  if (mapElement?.view) mapElement.view.padding = { right: 0 };
+}
+
+function statsKey(name) { return `ba_${name.toLowerCase().replaceAll(' ', '_')}`; }
+
+function statisticRecord(feature) {
+  if (!feature) return statisticsData.national;
+  const attributes = feature.attributes;
+  const values = Object.fromEntries(SPECIES.map(species => [species.name, Number(attributes[statsKey(species.name)])]));
+  return {
+    forest_pixels: Math.round(Number(attributes.forest_km2) * 1_000_000 / 900), modelled_area_km2: Number(attributes.forest_km2),
+    mean_basal_area_percent: values, broadleaf_basal_area_percent: Number(attributes.broadleaf),
+    leading_group: attributes.lead_group, leading_group_basal_area_percent: Number(attributes.lead_ba_pct), top_two_gap_percentage_points: Number(attributes.top2_gap_pp)
+  };
+}
+
+function renderStatistics(record) {
+  q('#stats-area').textContent = `${record.modelled_area_km2.toLocaleString(undefined, { maximumFractionDigits: 0 })} km²`;
+  q('#stats-broadleaf').textContent = `${record.broadleaf_basal_area_percent.toFixed(1)}%`;
+  q('#stats-leading').textContent = record.leading_group;
+  q('#stats-leading-value').textContent = `${record.leading_group_basal_area_percent.toFixed(1)}% basal-area proportion`;
+  if (!window.echarts) return;
+  statisticsChart ??= window.echarts.init(q('#statistics-chart'), null, { renderer: 'svg' });
+  const ranked = SPECIES.map(species => ({ ...species, value: record.mean_basal_area_percent[species.name] })).sort((a, b) => b.value - a.value);
+  statisticsChart.setOption({
+    animationDuration: 420, animationEasing: 'cubicOut', animationDelay: index => index * 24,
+    grid: { left: 102, right: 40, top: 10, bottom: 22 },
+    xAxis: { type: 'value', min: 0, max: 100, axisLabel: { color: '#75817b', fontFamily: 'DM Mono', fontSize: 10, formatter: value => `${value}%` }, axisLine: { lineStyle: { color: '#d9e1dd' } }, axisTick: { show: false }, splitLine: { lineStyle: { color: '#edf1ef', type: 'dashed' } } },
+    yAxis: { type: 'category', inverse: true, data: ranked.map(item => item.name), axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: '#43524b', fontFamily: 'DM Sans', fontSize: 12, fontWeight: 500 } },
+    series: [{ type: 'bar', barWidth: 13, data: ranked.map(item => ({ value: item.value, itemStyle: { color: item.colour, borderRadius: [0, 2, 2, 0] } })), label: { show: true, position: 'right', color: '#314139', fontFamily: 'DM Mono', fontSize: 10, formatter: p => `${p.value.toFixed(1)}%` } }]
+  }, { notMerge: true });
+  requestAnimationFrame(() => statisticsChart.resize());
+}
+
+async function selectCanton(code) {
+  const feature = cantonFeatures.find(item => item.attributes.code === code);
+  renderStatistics(statisticRecord(feature));
+  if (!feature) {
+    if (cantonSelectionGraphic) { mapElement.view.graphics.remove(cantonSelectionGraphic); cantonSelectionGraphic = null; }
+    return;
+  }
+  if (cantonSelectionGraphic) mapElement.view.graphics.remove(cantonSelectionGraphic);
+  cantonSelectionGraphic = new Graphic({ geometry: feature.geometry, symbol: { type: 'simple-fill', color: [44, 105, 86, 0.08], outline: { color: '#173c32', width: 2 } } });
+  mapElement.view.graphics.add(cantonSelectionGraphic);
+  await mapElement.view.goTo(feature.geometry.extent.expand(1.22), { duration: 700, easing: 'ease-out' });
+}
+
+async function openStatistics() {
+  exitCompare(); closePanels();
+  q('#statistics-panel').classList.add('open'); q('#statistics-panel').setAttribute('aria-hidden', 'false'); q('#stats-toggle').setAttribute('aria-expanded', 'true');
+  mapElement.view.padding = { right: q('#statistics-panel').offsetWidth };
+  if (!statisticsData) {
+    const data = await fetch('./data/statistics.json').then(response => response.json());
+    statisticsData = data;
+    const result = await cantonStatisticsLayer.queryFeatures({ where: '1=1', outFields: ['*'], returnGeometry: true, orderByFields: ['canton_no'] });
+    cantonFeatures = result.features;
+    q('#canton-select').insertAdjacentHTML('beforeend', cantonFeatures.map(feature => `<option value="${feature.attributes.code}">${feature.attributes.canton}</option>`).join(''));
+  }
+  q('#canton-select').value = 'national'; renderStatistics(statisticsData.national);
+}
+
 function categoricalRenderer() {
-  return { type: 'raster-colormap', colormapInfos: SPECIES.map((species, index) => ({ value: index + 1, color: species.colour, label: species.name })) };
+  return { type: 'raster-colormap', colormapInfos: SPECIES.map(species => ({ value: species.rasterValue, color: species.colour, label: speciesLabel(species) })) };
 }
 
 function createLightBaseLayer() {
@@ -72,7 +143,7 @@ function createSwissimageBaseLayer() {
 
 function createResultLayer(key) {
   if (key === 'none') return null;
-  if (key === 'dominant') return new ImageryTileLayer({ title: 'Dominant species', url: DOMINANT_URL, format: 'lerc', interpolation: 'nearest', opacity: 1, renderer: categoricalRenderer() });
+  if (key === 'dominant') return new ImageryTileLayer({ title: 'Dominant tree group', url: DOMINANT_URL, format: 'lerc', interpolation: 'nearest', opacity: 1, renderer: categoricalRenderer() });
   return new ImageryTileLayer({ title: PROBABILITY_NAMES[key], url: PROBABILITY_URLS[key], format: 'lerc', interpolation: 'nearest', opacity: 1, renderer: probabilityRenderer() });
 }
 
@@ -103,7 +174,7 @@ async function rebuildCompareSide(side) {
 async function applyComparePreset(name) {
   const presets = {
     'dominant-aerial': ['dominant', 'light', 'none', 'swissimage'],
-    'spruce-beech': ['picea', 'light', 'fagus', 'light'],
+    'spruce-beech': ['spruce', 'light', 'beech', 'light'],
     'broadleaf-dominant': ['broadleaf', 'light', 'dominant', 'light']
   };
   const preset = presets[name];
@@ -172,7 +243,7 @@ function probabilityRenderer() {
 }
 
 function buildLegend() {
-  q('#species-legend').innerHTML = SPECIES.map(species => `<li><i style="background:${species.colour}"></i>${species.name}</li>`).join('');
+  q('#species-legend').innerHTML = SPECIES.map(species => `<li title="Model category ${species.modelId}"><i style="background:${species.colour}"></i><span>${species.name}</span></li>`).join('');
 }
 
 function isProbabilityMode() { return activeMode !== 'dominant'; }
@@ -187,7 +258,7 @@ function setMode(mode) {
   q('#probability-controls').hidden = !probability;
   q('#dominant-toggle').checked = !probability; if (dominantLayer) dominantLayer.visible = !probability;
   q('#probability-toggle').checked = probability;
-  if (probability) activateProbability(activeLayerKey()); else { if (probabilityLayer) probabilityLayer.visible = false; updateLegend(); setStatus('Dominant species · 9 categorical classes · native 30 m grid'); }
+  if (probability) activateProbability(activeLayerKey()); else { if (probabilityLayer) probabilityLayer.visible = false; updateLegend(); setStatus('Dominant tree group · 11 classes · native 30 m grid'); }
   updateLegend();
 }
 
@@ -196,7 +267,7 @@ function updateLegend() {
   const speciesMode = activeMode === 'species';
   q('#probability-select').hidden = !speciesMode;
   q('#legend-title').hidden = speciesMode;
-  q('#legend-title').textContent = activeMode === 'leaftype' ? 'Broadleaf share' : 'Dominant species';
+  q('#legend-title').textContent = activeMode === 'leaftype' ? 'Broadleaf basal-area proportion' : 'Dominant tree group';
   q('#species-legend').hidden = probability;
   q('#probability-legend').hidden = !probability;
 }
@@ -350,22 +421,48 @@ function formatCoordinates(point) {
 function renderPixelComposition(values, dominantSpecies, point) {
   const sorted = values.map((value, index) => ({ ...SPECIES[index], value })).sort((a, b) => b.value - a.value);
   const dominantValue = values[SPECIES.findIndex(species => species.key === dominantSpecies.key)];
-  q('#popup-dominant').textContent = dominantSpecies.name;
+  q('#popup-dominant').textContent = speciesLabel(dominantSpecies);
   q('#popup-share').textContent = `${(dominantValue * 100).toFixed(1)}%`;
   q('#popup-rule').style.background = dominantSpecies.colour;
   q('#popup-coords').textContent = formatCoordinates(point);
-  q('#popup-list').innerHTML = sorted.map((species, index) => `
-    <div class="popup-row${species.key === dominantSpecies.key ? ' dominant' : ''}" style="--i:${index}">
-      <span class="popup-name"><i style="background:${species.colour}"></i><b>${species.name}</b></span>
-      <span class="popup-bar"><i style="background:${species.colour}"></i></span>
-      <output>${(species.value * 100).toFixed(1)}%</output>
-    </div>`).join('');
+  renderCompositionChart(sorted, dominantSpecies);
   setPopupState('result');
-  requestAnimationFrame(() => {
-    q('#popup-list').querySelectorAll('.popup-bar i').forEach((bar, index) => {
-      bar.style.width = `${Math.max(0, Math.min(100, sorted[index].value * 100))}%`;
-    });
-  });
+}
+
+function renderCompositionChart(sorted, dominantSpecies) {
+  const chartElement = q('#popup-chart');
+  if (!window.echarts) throw new Error('Apache ECharts could not be loaded.');
+  compositionChart ??= window.echarts.init(chartElement, null, { renderer: 'svg' });
+  compositionChart.setOption({
+    animationDuration: 460,
+    animationDurationUpdate: 300,
+    animationEasing: 'cubicOut',
+    animationDelay: index => index * 32,
+    grid: { left: 24, right: 18, top: 24, bottom: 66 },
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, valueFormatter: value => `${Number(value).toFixed(1)}%` },
+    xAxis: {
+      type: 'category', data: sorted.map(species => species.name),
+      axisLine: { lineStyle: { color: '#d9e1dd' } },
+      axisTick: { alignWithLabel: true, lineStyle: { color: '#d9e1dd' } },
+      axisLabel: { color: '#43524b', fontFamily: 'DM Sans', fontSize: 11, fontWeight: 500, interval: 0, rotate: 32, margin: 12 }
+    },
+    yAxis: {
+      type: 'value', min: 0, max: 100,
+      axisLabel: { color: '#75817b', fontFamily: 'DM Mono', fontSize: 10, formatter: value => `${value}%` },
+      axisLine: { show: false }, axisTick: { show: false },
+      splitLine: { lineStyle: { color: '#edf1ef', type: 'dashed' } }
+    },
+    series: [{
+      name: 'Basal-area proportion', type: 'bar', barMaxWidth: 36,
+      data: sorted.map(species => ({
+        value: species.value * 100,
+        itemStyle: { color: species.colour, borderRadius: [3, 3, 0, 0] }
+      })),
+      label: { show: true, position: 'top', color: '#314139', fontFamily: 'DM Mono', fontSize: 10, formatter: params => `${params.value.toFixed(1)}%` },
+      emphasis: { focus: 'series' }
+    }]
+  }, { notMerge: true, lazyUpdate: false });
+  requestAnimationFrame(() => compositionChart.resize());
 }
 
 async function inspectPixel(point, screenPoint, target) {
@@ -373,7 +470,7 @@ async function inspectPixel(point, screenPoint, target) {
   inspectTarget = target || mapElement;
   const requestId = ++inspectionRequestId;
   setPopupState('loading'); openPopup(point); drawInspectionPoint(point);
-  setStatus('Reading nine species values at selected 30 m cell…');
+  setStatus('Reading 11 tree-group basal-area values at selected 30 m cell…');
   try {
     const speciesLayers = await Promise.all(SPECIES.map(getInspectionLayer));
     const probabilityResults = await hitTestInspectionLayers(speciesLayers, screenPoint, inspectTarget);
@@ -385,22 +482,22 @@ async function inspectPixel(point, screenPoint, target) {
     const computedDominant = values.indexOf(Math.max(...values));
     const dominantSpecies = SPECIES[computedDominant];
     renderPixelComposition(values, dominantSpecies, point);
-    setStatus(`${dominantSpecies.name} · selected 30 m cell · nine values loaded`);
+    setStatus(`${dominantSpecies.name} · selected 30 m cell · 11 basal-area values loaded`);
   } catch (error) {
     if (requestId !== inspectionRequestId) return;
     console.error(error);
     setPopupState('nodata');
     q('#popup-nodata-title').textContent = 'Values unavailable';
-    q('#popup-nodata-copy').textContent = 'One or more probability services could not be read. Please try again.';
-    setStatus('Could not read all nine pixel values.');
+    q('#popup-nodata-copy').textContent = 'One or more basal-area services could not be read. Please try again.';
+    setStatus('Could not read all 11 pixel values.');
   }
 }
 
 function showInfo(kind) {
   const content = {
-    methods: ['Methods', 'TreeAI Switzerland Forest Species Composition visualises a national tree species model. Dominant species is a categorical argmax layer; each probability layer is a single-band Float32 raster. Values are rendered with nearest-neighbour sampling, so no new values are introduced between original grid cells.'],
-    data: ['Data & scope', 'National composition statistics in this first release are calculated from the published dominant-species ImageServer histogram: 15,019,115 classified 30 m cells. Canton summaries require a dedicated zonal-statistics table and will be added as a separate verified data product.'],
-    stats: ['About these statistics', 'This chart reports the share of forest grid cells for which each species is the dominant model class. It is not a survey of individual tree stems, basal area, or timber volume.']
+    methods: ['Methods and data meaning', 'TreeAI Switzerland Forest Basal-Area Composition visualises 11 Swiss NFI tree groups. Each Float32 layer represents the modelled basal-area proportion of one group, and the dominant layer is their categorical argmax. In the Swiss NFI, basal area is the sum of stem cross-sectional areas measured at 1.3 m; it covers living trees and shrubs with DBH ≥12 cm. Values are rendered with nearest-neighbour sampling, so no new values are introduced between original 30 m cells.'],
+    data: ['Data & scope', 'The model groups follow the Swiss NFI main-tree-species grouping, plus Other for all remaining retained taxa. A displayed percentage is a basal-area proportion, not a proportion of individual trees, land area, timber volume, or the probability that a class label is correct.'],
+    stats: ['About these statistics', 'This chart reports the share of forest grid cells for which each tree group is the dominant model class. It is not a count of individual tree stems.']
   }[kind];
   q('#info-title').textContent = content[0]; q('#info-copy').textContent = content[1]; q('#info-dialog').showModal();
 }
@@ -422,11 +519,14 @@ function wire() {
   q('#focus-switzerland').onclick = () => (compareModeActive ? compareLeftView : mapElement).goTo({ center: [8.509764, 46.929471], zoom: 9 });
   q('#zoom-in').onclick = () => { const target = compareModeActive ? compareLeftView : mapElement; target.goTo({ zoom: target.zoom + 1 }); }; q('#zoom-out').onclick = () => { const target = compareModeActive ? compareLeftView : mapElement; target.goTo({ zoom: target.zoom - 1 }); };
   q('#settings-toggle').onclick = () => setPanel('settings');
+  q('#stats-toggle').onclick = () => openStatistics().catch(error => { console.error(error); fail(`Statistics could not load: ${error.message}`); closeStatistics(); });
+  q('#statistics-close').onclick = closeStatistics;
+  q('#canton-select').onchange = event => selectCanton(event.target.value).catch(error => { console.error(error); fail(`Could not zoom to canton: ${error.message}`); });
   q('#drawer-toggle').onclick = closePanels;
   q('#inspect-toggle').onclick = () => setInspectMode(!inspectActive);
   q('#popup-close').onclick = closePopup;
   document.addEventListener('keydown', event => { if (event.key === 'Escape') closePopup(); });
-  window.addEventListener('resize', positionPopup);
+  window.addEventListener('resize', () => { positionPopup(); compositionChart?.resize(); statisticsChart?.resize(); });
   q('#legend-toggle').onclick = () => {
     const content = q('#legend-content'); content.hidden = !content.hidden; q('#legend-toggle').textContent = content.hidden ? '+' : '−';
   };
@@ -461,14 +561,21 @@ function wire() {
 async function boot() {
   try {
     if (!DOMINANT_URL) throw new Error('No dominant ImageServer URL is configured.');
-    [ImageryTileLayer, MultipartColorRamp, AlgorithmicColorRamp, Graphic] = await $arcgis.import(['@arcgis/core/layers/ImageryTileLayer.js', '@arcgis/core/rest/support/MultipartColorRamp.js', '@arcgis/core/rest/support/AlgorithmicColorRamp.js', '@arcgis/core/Graphic.js']);
+    [ImageryTileLayer, FeatureLayer, MultipartColorRamp, AlgorithmicColorRamp, Graphic, geometryEngine] = await $arcgis.import(['@arcgis/core/layers/ImageryTileLayer.js', '@arcgis/core/layers/FeatureLayer.js', '@arcgis/core/rest/support/MultipartColorRamp.js', '@arcgis/core/rest/support/AlgorithmicColorRamp.js', '@arcgis/core/Graphic.js', '@arcgis/core/geometry/geometryEngine.js']);
     [WebTileLayer, Map, MapView, reactiveUtils] = await $arcgis.import(['@arcgis/core/layers/WebTileLayer.js', '@arcgis/core/Map.js', '@arcgis/core/views/MapView.js', '@arcgis/core/core/reactiveUtils.js']);
     mapElement = q('#map'); await mapElement.componentOnReady(); mapElement.map.basemap = null;
     const lightBaseLayer = createLightBaseLayer();
     swissImageLayer = createSwissimageBaseLayer(); swissImageLayer.visible = q('#swissimage-toggle').checked;
-    dominantLayer = new ImageryTileLayer({ title: 'Dominant species', url: DOMINANT_URL, format: 'lerc', interpolation: 'nearest', opacity: Number(q('#dominant-opacity').value) / 100, renderer: categoricalRenderer() });
-    mapElement.map.addMany([lightBaseLayer, swissImageLayer, dominantLayer]); await dominantLayer.load();
-    buildLegend(); wire(); updateLegend(); setStatus('Dominant species · 9 categorical classes · native 30 m grid');
+    dominantLayer = new ImageryTileLayer({ title: 'Dominant tree group', url: DOMINANT_URL, format: 'lerc', interpolation: 'nearest', opacity: Number(q('#dominant-opacity').value) / 100, renderer: categoricalRenderer() });
+    cantonStatisticsLayer = new FeatureLayer({ title: 'Swiss canton statistics', url: CANTON_STATISTICS_URL, outFields: ['*'], listMode: 'hide' });
+    mapElement.map.addMany([lightBaseLayer, swissImageLayer, dominantLayer]); await Promise.all([dominantLayer.load(), cantonStatisticsLayer.load()]);
+    const boundaryResult = await cantonStatisticsLayer.queryFeatures({ where: '1=1', returnGeometry: true, outFields: [] });
+    nationalBoundaryGraphic = new Graphic({
+      geometry: geometryEngine.union(boundaryResult.features.map(feature => feature.geometry)),
+      symbol: { type: 'simple-fill', color: [255, 255, 255, 0], outline: { color: [22, 54, 44, 0.88], width: 1.35 } }
+    });
+    mapElement.view.graphics.add(nationalBoundaryGraphic);
+    buildLegend(); wire(); updateLegend(); setStatus('Dominant tree group · 11 classes · native 30 m grid');
   } catch (error) { console.error(error); fail(`ArcGIS map could not load: ${error.message}`); setStatus('Connection failed. Confirm public ImageServer access.'); }
 }
 
